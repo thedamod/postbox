@@ -1,0 +1,37 @@
+# dependencies
+node_modules/
+
+# builds
+.next/
+out/
+dist/
+.expo/
+coverage/
+
+# turbo
+.turbo/
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# env
+.env
+.env.local
+.env.*.local
+
+# os / editor
+.DS_Store
+.idea/
+.vscode/
+
+# native
+apps/mobile/ios/
+apps/mobile/android/
+
+# typescript
+*.tsbuildinfo
+
+# local backend data
+apps/web/data/

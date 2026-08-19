@@ -1,0 +1,24 @@
+{
+  "name": "@postbox/monorepo",
+  "private": true,
+  "packageManager": "pnpm@11.17.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "dev:web": "turbo run dev --filter=@postbox/web",
+    "dev:mobile": "turbo run dev --filter=@postbox/mobile",
+    "typecheck": "turbo run typecheck",
+    "typecheck:web": "turbo run typecheck --filter=@postbox/web",
+    "typecheck:mobile": "turbo run typecheck --filter=@postbox/mobile",
+    "typecheck:packages": "turbo run typecheck --filter=./packages/*",
+    "lint": "turbo run lint",
+    "test": "turbo run test"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.0",
+    "typescript": "^5.8.3"
+  }
+}
