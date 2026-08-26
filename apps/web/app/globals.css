@@ -1,0 +1,399 @@
+@import "tailwindcss";
+@import "@postbox/ui/globals.css";
+
+/* Scan the shared UI package so its component classes (variants included) are
+   generated for the web app. Tailwind's automatic detection only sees files
+   under the app root, which would silently drop hover/focus/dark states. */
+@source "../../../packages/ui/src";
+
+html,
+body {
+  height: 100%;
+}
+
+.mail-app {
+  --gmail-ink: #202124;
+  --gmail-surface: #f2f4f7;
+  --gmail-card: #ffffff;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .mail-list {
+    view-transition-name: mail-list;
+  }
+
+  .mail-detail {
+    view-transition-name: mail-detail;
+  }
+
+  ::view-transition-old(mail-list),
+  ::view-transition-new(mail-list),
+  ::view-transition-old(mail-detail),
+  ::view-transition-new(mail-detail) {
+    animation-duration: 180ms;
+    animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  }
+
+  .mail-thread {
+    animation: mail-row-in 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+
+  .mail-thread:nth-child(2) { animation-delay: 18ms; }
+  .mail-thread:nth-child(3) { animation-delay: 36ms; }
+  .mail-thread:nth-child(4) { animation-delay: 54ms; }
+  .mail-thread:nth-child(5) { animation-delay: 72ms; }
+}
+
+@keyframes mail-row-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.mobile-topbar,
+.mobile-bottom-nav,
+.mobile-drawer,
+.mobile-drawer-backdrop {
+  display: none;
+}
+
+.mobile-back-button {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  html,
+  body {
+    overflow: hidden;
+  }
+
+  .mail-app {
+    position: relative;
+    display: block;
+    background: var(--background);
+  }
+
+  .mobile-topbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 74px;
+    padding: 12px 14px 10px;
+    background: var(--background);
+  }
+
+  .mobile-icon-button {
+    display: grid;
+    width: 40px;
+    height: 40px;
+    flex: 0 0 40px;
+    place-items: center;
+    border: 0;
+    color: var(--foreground);
+    background: transparent;
+  }
+
+  .mobile-icon-button svg {
+    width: 24px;
+    height: 24px;
+  }
+
+  .mobile-search {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    flex: 1;
+    height: 48px;
+    gap: 9px;
+    padding: 0 16px;
+    border-radius: 24px;
+    background: var(--muted);
+  }
+
+  .mobile-search svg {
+    width: 20px;
+    color: var(--muted-foreground);
+  }
+
+  .mobile-search input {
+    width: 100%;
+    min-width: 0;
+    border: 0;
+    outline: 0;
+    color: var(--foreground);
+    background: transparent;
+    font: inherit;
+    font-size: 16px;
+  }
+
+  .mail-app > aside {
+    display: none;
+  }
+
+  .mail-main {
+    height: calc(100dvh - 138px);
+    display: block;
+  }
+
+  .mail-list {
+    width: 100% !important;
+    height: 100%;
+    border-right: 0;
+  }
+
+  .mail-list > .p-3 {
+    display: none;
+  }
+
+  .mail-list > .flex.items-center {
+    padding: 10px 18px 12px;
+  }
+
+  .mail-list > .flex-1 {
+    padding: 0 10px 16px;
+  }
+
+  .mail-thread {
+    min-height: 78px;
+    margin-bottom: 5px;
+    padding: 13px 12px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--card) 96%, var(--foreground));
+  }
+
+  .mail-thread-avatar {
+    display: flex;
+  }
+
+  .mobile-list-hidden,
+  .mobile-detail-hidden {
+    display: none !important;
+  }
+
+  .mail-detail {
+    width: 100%;
+    height: 100%;
+  }
+
+  .mail-detail > header {
+    padding: 18px 18px 16px;
+  }
+
+  .mobile-back-button {
+    display: inline-flex;
+    margin: -8px 0 10px -8px;
+  }
+
+  .mail-detail > header h1 {
+    font-size: 25px;
+    line-height: 1.2;
+  }
+
+  .mail-detail > div.flex-1 {
+    padding: 8px 10px 20px;
+  }
+
+  .mail-detail .mail-body {
+    font-size: 16px;
+  }
+
+  .mail-detail .mail-body-card,
+  .mail-detail [data-slot="card"] {
+    border-radius: 8px;
+    padding: 18px;
+  }
+
+  .mobile-bottom-nav {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    z-index: 20;
+    display: flex;
+    height: 64px;
+    justify-content: space-around;
+    padding: 7px 22px max(7px, env(safe-area-inset-bottom));
+    background: color-mix(in srgb, var(--background) 96%, var(--foreground));
+    border-top: 1px solid var(--border);
+  }
+
+  .mobile-bottom-nav button {
+    position: relative;
+    display: flex;
+    width: 84px;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
+    border: 0;
+    color: var(--muted-foreground);
+    background: transparent;
+    font: inherit;
+    font-size: 11px;
+  }
+
+  .mobile-bottom-nav button.active {
+    color: var(--foreground);
+  }
+
+  .mobile-bottom-nav svg {
+    width: 23px;
+    height: 23px;
+  }
+
+  .mobile-bottom-nav b {
+    position: absolute;
+    top: -2px;
+    right: 19px;
+    min-width: 16px;
+    padding: 1px 4px;
+    border-radius: 9px;
+    color: #201010;
+    background: #ffaaa8;
+    font-size: 10px;
+    font-weight: 700;
+  }
+
+  .mobile-drawer-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+    display: block;
+    border: 0;
+    background: rgb(0 0 0 / 45%);
+  }
+
+  .mobile-drawer {
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 50;
+    display: block;
+    width: min(86vw, 360px);
+    transform: translateX(-105%);
+    transition: transform 180ms ease;
+    background: var(--sidebar);
+    box-shadow: 4px 0 18px rgb(0 0 0 / 24%);
+  }
+
+  .mobile-drawer.is-open {
+    transform: translateX(0);
+  }
+
+  .mobile-drawer aside {
+    width: 100%;
+    height: 100%;
+    border: 0;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--primary) 18%, transparent);
+}
+
+/* Slim, quiet scrollbars consistent with the reference client's geometry. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--foreground) 18%, transparent) transparent;
+}
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  background: color-mix(in srgb, var(--foreground) 14%, transparent);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--foreground) 24%, transparent);
+}
+
+/* Rendered HTML email bodies (sanitized via DOMPurify before injection). */
+.mail-body {
+  overflow-wrap: break-word;
+  color: var(--foreground);
+}
+.mail-body a {
+  color: var(--primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.mail-body img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 6px;
+}
+.mail-body p {
+  margin: 0.75rem 0;
+}
+.mail-body h1,
+.mail-body h2,
+.mail-body h3 {
+  margin: 1rem 0 0.5rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+.mail-body h1 {
+  font-size: 1.375rem;
+}
+.mail-body h2 {
+  font-size: 1.125rem;
+}
+.mail-body h3 {
+  font-size: 1rem;
+}
+.mail-body ul,
+.mail-body ol {
+  margin: 0.75rem 0;
+  padding-left: 1.5rem;
+}
+.mail-body li {
+  margin: 0.25rem 0;
+}
+.mail-body blockquote {
+  border-left: 3px solid var(--border);
+  padding-left: 1rem;
+  margin: 0.75rem 0;
+  color: var(--muted-foreground);
+}
+.mail-body pre {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  background: var(--muted);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  overflow-x: auto;
+}
+.mail-body code {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+}
+.mail-body table {
+  border-collapse: collapse;
+  max-width: 100%;
+}
+.mail-body td,
+.mail-body th {
+  border: 1px solid var(--border);
+  padding: 4px 8px;
+}
+.mail-body hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 1rem 0;
+}
