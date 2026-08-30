@@ -1,0 +1,31 @@
+{
+  "expo": {
+    "name": "Mail",
+    "slug": "mail",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "scheme": "mail",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.example.mail"
+    },
+    "icon": "./assets/icon.svg",
+    "android": {
+      "package": "com.example.mail",
+      "adaptiveIcon": {
+        "backgroundColor": "#5770FF",
+        "foregroundImage": "./assets/icon.svg"
+      }
+    },
+    "web": {
+      "favicon": "./assets/icon.svg"
+    },
+    "plugins": [
+      "expo-sharing",
+      "expo-web-browser",
+      "expo-font"
+    ]
+  }
+}
