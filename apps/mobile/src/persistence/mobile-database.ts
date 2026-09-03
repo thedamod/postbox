@@ -100,6 +100,11 @@ CREATE TABLE IF NOT EXISTS sync_state (
   PRIMARY KEY (account_id, folder)
 );
 
+CREATE TABLE IF NOT EXISTS meta (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS tags (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   account_id INTEGER NOT NULL,
@@ -405,6 +410,25 @@ export class MobileStorage implements EmailStorage, AttachmentStore {
       `DELETE FROM sync_state WHERE account_id = ? AND folder = ?`,
       accountId,
       folder,
+    );
+  }
+
+  // ------------------------------------------------------------ key/value
+
+  getMeta(key: string): string | null {
+    const row = this.db.getFirstSync<{ value: string }>(
+      `SELECT value FROM meta WHERE key = ?`,
+      key,
+    );
+    return row?.value ?? null;
+  }
+
+  setMeta(key: string, value: string): void {
+    this.db.runSync(
+      `INSERT INTO meta (key, value) VALUES (?, ?)
+       ON CONFLICT (key) DO UPDATE SET value = excluded.value`,
+      key,
+      value,
     );
   }
 

@@ -15,15 +15,38 @@ import type {
   ProviderSession,
 } from "./provider";
 
+export type NewMessagePreview = {
+  /** Local stored message id (for deep-linking). */
+  messageId: number;
+  subject: string;
+  from: string;
+  snippet: string;
+};
+
 export type SyncFolderResult = {
   path: string;
   newMessages: number;
   lastUid: number;
+  /** Already-known messages whose read/starred flags changed remotely. */
+  flagsChanged: number;
+  /**
+   * Fresh arrivals in this folder (mode `"new"` only, capped). Backfill
+   * (`"older"`) never produces previews so clients don't notify for history.
+   */
+  previews: NewMessagePreview[];
 };
 
 export type SyncAccountResult = {
   account: string;
   folders: SyncFolderResult[];
+  /**
+   * Whether anything the UI shows changed: arrivals, flag reconciliations,
+   * or a mailbox reset. Clients poll this (plus `revision`) to decide
+   * between a cheap no-op and a refresh + notification.
+   */
+  changed: boolean;
+  /** Monotonic per-account counter, persisted in storage meta. */
+  revision: number;
   /** Set when the account's sync failed; other accounts still sync. */
   error?: string;
 };
@@ -54,6 +77,8 @@ export type SyncJob = {
   id: string;
   /** `null` means every account. */
   accountId: number | null;
+  /** Folder restriction for background jobs, if any. */
+  folderPath: string | null;
   status: SyncJobStatus;
   startedAt: string;
   finishedAt: string | null;
@@ -72,6 +97,40 @@ const MESSAGE_CONCURRENCY = Number(process.env.MAIL_SYNC_MESSAGE_CONCURRENCY ?? 
 // load is fast; later syncs are incremental (new mail only).
 const FULL_SYNC_LIMIT = Number(process.env.MAIL_SYNC_FULL_LIMIT ?? 50);
 const MAX_JOB_HISTORY = 20;
+// Previews per folder kept for notifications; small on purpose.
+const PREVIEW_LIMIT = 5;
+
+function syncRevisionKey(accountId: number): string {
+  return `sync_revision:${accountId}`;
+}
+
+function syncLastAtKey(accountId: number): string {
+  return `sync_last_at:${accountId}`;
+}
+
+/** Persisted monotonic counter clients use to detect remote changes. */
+export function readSyncRevision(deps: ClientDeps, accountId: number): number {
+  const raw = deps.storage.getMeta(syncRevisionKey(accountId));
+  const revision = raw == null ? 0 : Number(raw);
+  return Number.isInteger(revision) && revision >= 0 ? revision : 0;
+}
+
+/** Cheap poll state: revision + last successful sync, no provider I/O. */
+export function readAccountSyncState(
+  deps: ClientDeps,
+  accountId: number,
+): { revision: number; lastSyncAt: string | null } {
+  return {
+    revision: readSyncRevision(deps, accountId),
+    lastSyncAt: deps.storage.getMeta(syncLastAtKey(accountId)),
+  };
+}
+
+function bumpSyncRevision(deps: ClientDeps, accountId: number): number {
+  const next = readSyncRevision(deps, accountId) + 1;
+  deps.storage.setMeta(syncRevisionKey(accountId), String(next));
+  return next;
+}
 
 function normalizeAddresses(value: Array<{ name?: string; address?: string }>): Address[] {
   if (!Array.isArray(value)) return [];
@@ -166,7 +225,7 @@ async function ingestMessage(
   account: EmailAccount,
   fetched: FetchedMessage,
   enabledRules: TagRule[],
-): Promise<number | null> {
+): Promise<{ id: number; subject: string; from: string; snippet: string } | null> {
   if (!fetched.source) return null;
 
   const parsed = await simpleParser(Buffer.from(fetched.source));
@@ -215,7 +274,13 @@ async function ingestMessage(
 
   applyTags(deps.storage, messageId, account.id, input, fetched.labels, enabledRules);
 
-  return messageId;
+  const from = input.from[0];
+  return {
+    id: messageId,
+    subject: input.subject,
+    from: from ? (from.name || from.address) : "(unknown)",
+    snippet: input.snippet ?? input.subject,
+  };
 }
 
 export class SyncEngine {
@@ -231,13 +296,13 @@ export class SyncEngine {
   // ------------------------------------------------------- background jobs
 
   /** Kick off a background sync of one account. Returns immediately. */
-  startSyncAccount(accountId: number): SyncJob {
-    return this.createJob(accountId, "new");
+  startSyncAccount(accountId: number, folderPath?: string): SyncJob {
+    return this.createJob(accountId, "new", folderPath);
   }
 
   /** Kick off a background "load older mail" sync of one account. */
-  startSyncMore(accountId: number): SyncJob {
-    return this.createJob(accountId, "older");
+  startSyncMore(accountId: number, folderPath?: string): SyncJob {
+    return this.createJob(accountId, "older", folderPath);
   }
 
   /** Kick off a background sync of every account. Returns immediately. */
@@ -255,10 +320,11 @@ export class SyncEngine {
     );
   }
 
-  private createJob(accountId: number | null, mode: "new" | "older"): SyncJob {
+  private createJob(accountId: number | null, mode: "new" | "older", folderPath?: string): SyncJob {
     const job: SyncJob = {
       id: `job-${++this.counter}`,
       accountId,
+      folderPath: folderPath ?? null,
       status: "running",
       startedAt: new Date().toISOString(),
       finishedAt: null,
@@ -282,8 +348,8 @@ export class SyncEngine {
         job.accountId == null
           ? await this.syncAll()
           : mode === "older"
-            ? [await this.syncOlderAccount(job.accountId)]
-            : [await this.syncAccount(job.accountId)];
+            ? [await this.syncOlderAccount(job.accountId, job.folderPath ?? undefined)]
+            : [await this.syncAccount(job.accountId, job.folderPath ?? undefined)];
       job.status = "done";
     } catch (cause) {
       console.error("[sync] job failed:", cause);
@@ -358,6 +424,8 @@ export class SyncEngine {
           return {
             account: account.email,
             folders: [],
+            changed: false,
+            revision: readSyncRevision(this.deps, account.id),
             error: describeError(cause),
           };
         }
@@ -394,7 +462,7 @@ export class SyncEngine {
       // Shared across folders: a message already claimed/stored by one folder
       // (e.g. All Mail vs Inbox) is skipped, not re-parsed.
       const seen = new Set<string>();
-      const folders: SyncFolderResult[] = [];
+      const folders: Array<SyncFolderResult & { reset: boolean }> = [];
 
       // One connection per account; IMAP allows a single selected mailbox per
       // connection, so folders are synced sequentially on it.
@@ -402,7 +470,15 @@ export class SyncEngine {
         folders.push(await this.syncFolder(session, account, folder.path, seen, mode));
       }
 
-      return { account: account.email, folders };
+      const changed = folders.some(
+        (folder) => folder.newMessages > 0 || folder.flagsChanged > 0 || folder.reset,
+      );
+      const revision = changed
+        ? bumpSyncRevision(deps, account.id)
+        : readSyncRevision(deps, account.id);
+      deps.storage.setMeta(syncLastAtKey(account.id), new Date().toISOString());
+
+      return { account: account.email, folders, changed, revision };
     } finally {
       await session.logout();
     }
@@ -414,11 +490,12 @@ export class SyncEngine {
     folderPath: string,
     seen: Set<string>,
     mode: "new" | "older",
-  ): Promise<SyncFolderResult> {
+  ): Promise<SyncFolderResult & { reset: boolean }> {
     const deps = this.deps;
     const state = deps.storage.getSyncState(account.id, folderPath);
 
     let fetch: FetchResult;
+    let reset = false;
 
     if (mode === "older") {
       // Load progressively older mail. The frontier is `minUid` (fall back to
@@ -426,7 +503,7 @@ export class SyncEngine {
       const minUid = state?.minUid ?? state?.lastUid ?? 0;
 
       if (minUid <= 1) {
-        return { path: folderPath, newMessages: 0, lastUid: state?.lastUid ?? 0 };
+        return { path: folderPath, newMessages: 0, lastUid: state?.lastUid ?? 0, flagsChanged: 0, previews: [], reset: false };
       }
 
       fetch = await session.fetchMailbox({
@@ -453,6 +530,7 @@ export class SyncEngine {
 
       if (uidValidityChanged) {
         // Mailbox was reset; fall back to a full sync.
+        reset = true;
         deps.storage.clearSyncState(account.id, folderPath);
         fetch = await session.fetchMailbox({
           path: folderPath,
@@ -468,6 +546,7 @@ export class SyncEngine {
     // Keep only the messages that aren't already stored, so we never download
     // bodies we already have.
     const pending: FetchedMessage[] = [];
+    let flagsChanged = 0;
 
     for (const message of fetch.messages) {
       const headerId = message.messageId?.trim();
@@ -483,11 +562,19 @@ export class SyncEngine {
         const existingId = deps.storage.findMessageIdByHeader(account.id, headerId);
 
         if (existingId != null) {
-          deps.storage.addMessageFolder(existingId, account.id, message.path);
-          deps.storage.updateFlagsIfChanged(existingId, {
+          const incoming = {
             seen: message.flags.includes("\\Seen"),
             starred: message.flags.includes("\\Starred"),
-          });
+          };
+          const existing = deps.storage.getMessage(existingId);
+          if (
+            existing &&
+            (existing.flags.seen !== incoming.seen || existing.flags.starred !== incoming.starred)
+          ) {
+            flagsChanged += 1;
+          }
+          deps.storage.addMessageFolder(existingId, account.id, message.path);
+          deps.storage.updateFlagsIfChanged(existingId, incoming);
           continue;
         }
 
@@ -498,6 +585,7 @@ export class SyncEngine {
     }
 
     let newMessages = 0;
+    const previews: NewMessagePreview[] = [];
 
     if (pending.length > 0) {
       // Batch-download raw sources for only the unknown messages, then ingest
@@ -524,7 +612,20 @@ export class SyncEngine {
           },
         );
 
-        newMessages += ingested.filter((id) => id != null).length;
+        for (const item of ingested) {
+          if (item == null) continue;
+          newMessages += 1;
+          // Only genuinely new arrivals feed notifications. Backfill
+          // ("older") replays history the user already lived through.
+          if (mode === "new" && previews.length < PREVIEW_LIMIT) {
+            previews.push({
+              messageId: item.id,
+              subject: item.subject,
+              from: item.from,
+              snippet: item.snippet.slice(0, 140),
+            });
+          }
+        }
       }
     }
 
@@ -558,6 +659,9 @@ export class SyncEngine {
       path: folderPath,
       newMessages,
       lastUid: mode === "older" ? (state?.lastUid ?? 0) : fetch.lastUid,
+      flagsChanged,
+      previews,
+      reset,
     };
   }
 }
