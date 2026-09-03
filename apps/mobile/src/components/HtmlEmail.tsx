@@ -8,7 +8,7 @@ import RenderHtml, {
   type MixedStyleDeclaration,
 } from "react-native-render-html";
 
-import { rewriteRemoteImageSources } from "@postbox/email-client/domain";
+import { rewriteRemoteImageSources, replaceMediaWithLinks } from "@postbox/email-client/domain";
 
 import { API_BASE_URL } from "../lib/api";
 import { useTheme } from "../theme";
@@ -150,7 +150,7 @@ export function HtmlEmail({ html, text }: HtmlEmailProps) {
   };
 
   const proxiedHtml = rewriteRemoteImageSources(
-    html,
+    replaceMediaWithLinks(html),
     (url) => `${API_BASE_URL}/api/image?url=${encodeURIComponent(url)}`,
   );
 

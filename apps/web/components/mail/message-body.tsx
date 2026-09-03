@@ -2,13 +2,17 @@
 
 import { useEffect, useState } from "react";
 import DOMPurify from "dompurify";
-import { rewriteRemoteImageSources } from "@postbox/email-client/domain";
+import {
+  replaceMediaWithLinks,
+  rewriteRemoteImageSources,
+} from "@postbox/email-client/domain";
 
 /**
- * Sanitized message body: HTML is sanitized, then remote pixels are
- * rewritten to the privacy-safe `/api/image` proxy (the sender only ever
- * sees our server fetch, never the reader), so images simply load — no
- * per-message approval gate and no broken boxes.
+ * Sanitized message body: HTML is sanitized, embedded players are downgraded
+ * to explicit open/download links (they render broken and bypass the pixel
+ * proxy), then remote pixels are rewritten to the privacy-safe `/api/image`
+ * proxy (the sender only ever sees our server fetch, never the reader), so
+ * images simply load — no per-message approval gate and no broken boxes.
  */
 export function MessageBody({ html, text }: { html?: string | null; text?: string }) {
   const [sanitized, setSanitized] = useState<string | null>(null);
@@ -28,8 +32,9 @@ export function MessageBody({ html, text }: { html?: string | null; text?: strin
       anchor.setAttribute("target", "_blank");
       anchor.setAttribute("rel", "noopener noreferrer");
     }
+    const withLinks = replaceMediaWithLinks(doc.body.innerHTML);
     const withProxiedImages = rewriteRemoteImageSources(
-      doc.body.innerHTML,
+      withLinks,
       (url) => `/api/image?url=${encodeURIComponent(url)}`,
     );
     setSanitized(withProxiedImages);
