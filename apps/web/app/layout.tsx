@@ -1,5 +1,12 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
+import { cookies } from "next/headers";
+
+import {
+  THEME_COLOR_DARK,
+  THEME_COLOR_LIGHT,
+  resolveServerTheme,
+} from "@/lib/theme";
 
 import "./globals.css";
 
@@ -11,13 +18,18 @@ export const metadata: Metadata = {
   },
 };
 
-const THEME_SCRIPT = `(function(){try{var s=localStorage.getItem("mail-theme");var d=s?JSON.parse(s):null;var dark=d==="dark"||((!d||d==="system")&&window.matchMedia("(prefers-color-scheme: dark)").matches);if(dark)document.documentElement.classList.add("dark")}catch(e){}})();`;
+export default async function RootLayout({ children }: { children: ReactNode }) {
+  // Server-painted theme from cookie mirrors: deterministic pre-paint with
+  // zero flash. Scripts rendered by React never execute before paint, so a
+  // client boot script cannot do this job — the class must arrive in the
+  // byte stream. The client hook owns it from hydration onward.
+  const cookieHeader = (await cookies()).toString();
+  const dark = resolveServerTheme(cookieHeader) === "dark";
 
-export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className={dark ? "dark" : undefined} style={{ colorScheme: dark ? "dark" : "light" }} suppressHydrationWarning>
       <head>
-        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+        <meta name="theme-color" content={dark ? THEME_COLOR_DARK : THEME_COLOR_LIGHT} />
       </head>
       <body>{children}</body>
     </html>
