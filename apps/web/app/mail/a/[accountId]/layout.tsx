@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { notFound } from "next/navigation";
 import { AppShell } from "@/components/shell/app-shell";
+import { ReauthBanner } from "@/components/shell/reauth-banner";
 import { Sidebar } from "@/components/shell/sidebar";
 import { WorkspaceTabs } from "@/components/shell/workspace-tabs";
 import {
@@ -38,6 +39,7 @@ export default async function MailAccountLayout({ children, params }: LayoutProp
     <AppShell account={account} accounts={accounts} counts={counts} collections={collections} initialRevision={initialRevision}>
       <Sidebar accounts={accounts} account={account} counts={counts} collections={collections} />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <ReauthBanner accountId={account.id} />
         <WorkspaceTabs />
         {children}
       </div>

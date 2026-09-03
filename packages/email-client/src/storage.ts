@@ -129,6 +129,7 @@ export interface EmailStorage {
    */
   getMeta(key: string): string | null;
   setMeta(key: string, value: string): void;
+  deleteMeta(key: string): void;
 
   // ------------------------------------------------------------- messages
 

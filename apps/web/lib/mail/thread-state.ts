@@ -6,6 +6,36 @@
  * one mutation path with optimistic updates at the call site.
  */
 
+export const REAUTH_EVENT = "postbox:reauth-required";
+
+export type ReauthDetail = { accountId: number | null };
+
+/** Broadcast a dead-grant signal so the reconnect banner can appear. */
+export function notifyReauthRequired(accountId: number | null): void {
+  window.dispatchEvent(new CustomEvent<ReauthDetail>(REAUTH_EVENT, { detail: { accountId } }));
+}
+
+export class ApiRequestError extends Error {
+  constructor(
+    message: string,
+    readonly code?: string,
+    readonly accountId?: number,
+  ) {
+    super(message);
+    this.name = "ApiRequestError";
+  }
+}
+
+type ErrorShape = { error?: string; code?: string; accountId?: number };
+
+function toApiError(data: ErrorShape | null, fallback: string): ApiRequestError {
+  const error = new ApiRequestError(data?.error ?? fallback, data?.code, data?.accountId);
+  if (error.code === "reauth_required") {
+    notifyReauthRequired(error.accountId ?? null);
+  }
+  return error;
+}
+
 export type ThreadAction =
   | { type: "unread"; unread: boolean }
   | { type: "starred"; starred: boolean }
@@ -19,8 +49,8 @@ async function postAction(messageId: string, body: Record<string, unknown>) {
     body: JSON.stringify(body),
   });
   if (!res.ok) {
-    const data = (await res.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(data?.error ?? `Action failed (${res.status})`);
+    const data = (await res.json().catch(() => null)) as ErrorShape | null;
+    throw toApiError(data, `Action failed (${res.status})`);
   }
 }
 
@@ -68,7 +98,7 @@ export async function sendMail(input: {
     body: JSON.stringify({ accountId: Number(input.accountId), to: input.to, cc: input.cc, bcc: input.bcc, subject: input.subject, text: input.text }),
   });
   if (!res.ok) {
-    const data = (await res.json().catch(() => null)) as { error?: string } | null;
-    throw new Error(data?.error ?? `Send failed (${res.status})`);
+    const data = (await res.json().catch(() => null)) as ErrorShape | null;
+    throw toApiError(data, `Send failed (${res.status})`);
   }
 }

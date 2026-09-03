@@ -10,6 +10,7 @@ import {
   View,
 } from "react-native";
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import * as WebBrowser from "expo-web-browser";
 import {
   IconEdit,
   IconFileText,
@@ -35,7 +36,7 @@ import { useTheme } from "../../theme";
 import { AppText } from "../../components/AppText";
 import { GlassView } from "../../components/GlassView";
 import { SenderAvatar } from "../../components/SenderAvatar";
-import { mailApi } from "../../lib/api";
+import { API_BASE_URL, mailApi, reauthAccountId } from "../../lib/api";
 import { haptics } from "../../lib/haptics";
 import {
   addNotificationTapListener,
@@ -110,6 +111,8 @@ export function InboxScreen({ navigation }: Props) {
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Account whose OAuth grant died (backend 401 reauth_required).
+  const [deadGrantAccountId, setDeadGrantAccountId] = useState<number | null>(null);
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [drawerMounted, setDrawerMounted] = useState(false);
@@ -209,8 +212,15 @@ export function InboxScreen({ navigation }: Props) {
         return [...prev, ...toRows(data.threads).filter((row) => !seen.has(row.id))];
       });
       setHasMore(data.hasMore);
+      setDeadGrantAccountId(null);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      const reauthId = reauthAccountId(cause);
+      if (reauthId != null) {
+        setDeadGrantAccountId(reauthId === -1 ? accountId : reauthId);
+        setError(null);
+      } else {
+        setError(cause instanceof Error ? cause.message : String(cause));
+      }
     } finally {
       setLoadingMore(false);
     }
@@ -225,6 +235,7 @@ export function InboxScreen({ navigation }: Props) {
         const { result } = await mailApi.sync(accountArg, folderArg);
         await load(accountArg, folderArg);
         haptics.success();
+        setDeadGrantAccountId(null);
         // Fresh-arrival previews drive notifications. Only the inbox pages
         // the user — Sent/Drafts/Trash arrivals (e.g. our own sends) stay
         // silent. Manual refreshes advance the watermark without buzzing;
@@ -245,8 +256,15 @@ export function InboxScreen({ navigation }: Props) {
           }
         }
       } catch (cause) {
-        haptics.error();
-        setError(cause instanceof Error ? cause.message : String(cause));
+        const reauthId = reauthAccountId(cause);
+        if (reauthId != null) {
+          // Dead grant: prompt a reconnect instead of a generic sync error.
+          setDeadGrantAccountId(reauthId === -1 ? accountArg : reauthId);
+          setError(null);
+        } else {
+          haptics.error();
+          setError(cause instanceof Error ? cause.message : String(cause));
+        }
       } finally {
         setSyncing(false);
       }
@@ -282,6 +300,15 @@ export function InboxScreen({ navigation }: Props) {
       if (searchTimer.current) clearTimeout(searchTimer.current);
     };
   }, []);
+
+  const reconnectGmail = async () => {
+    haptics.impact();
+    try {
+      await WebBrowser.openBrowserAsync(`${API_BASE_URL}/api/auth/gmail`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    }
+  };
 
   const switchAccount = (id: number) => {
     haptics.selection();
@@ -463,6 +490,29 @@ export function InboxScreen({ navigation }: Props) {
           />
         </Pressable></GlassView>
        </View>
+
+      {deadGrantAccountId != null ? (
+        <View style={[styles.reauthBox, { borderColor: palette.primary }]}>
+          <AppText style={styles.reauthText}>
+            Gmail disconnected — reconnect to keep syncing.
+          </AppText>
+          <View style={styles.reauthActions}>
+            <Pressable
+              onPress={() => void reconnectGmail()}
+              style={[styles.reauthButton, { backgroundColor: palette.primary }]}
+            >
+              <AppText style={styles.reauthButtonLabel}>Reconnect</AppText>
+            </Pressable>
+            <Pressable
+              onPress={() => setDeadGrantAccountId(null)}
+              hitSlop={8}
+              style={({ pressed }) => pressed && { opacity: 0.6 }}
+            >
+              <AppText style={styles.reauthDismiss}>Dismiss</AppText>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
 
       {error ? (
         <View style={styles.errorBox}>
@@ -769,6 +819,19 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(220, 38, 38, 0.1)",
   },
   errorText: { color: "#dc2626", fontSize: 12 },
+  reauthBox: {
+    marginHorizontal: 16,
+    marginTop: 8,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: 1,
+    gap: 10,
+  },
+  reauthText: { fontSize: 13, fontWeight: "600" },
+  reauthActions: { flexDirection: "row", alignItems: "center", gap: 16 },
+  reauthButton: { borderRadius: 8, paddingVertical: 8, paddingHorizontal: 16 },
+  reauthButtonLabel: { color: "#ffffff", fontSize: 13, fontWeight: "700" },
+  reauthDismiss: { fontSize: 13, color: "#71717a" },
   list: { paddingHorizontal: 16, paddingBottom: 96, flexGrow: 1 },
   spinner: { marginTop: 32 },
   empty: { color: "#71717a", fontSize: 14, textAlign: "center", marginTop: 32 },

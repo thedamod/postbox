@@ -13,7 +13,27 @@ const BASE_URL = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8080").re
 
 export const API_BASE_URL = BASE_URL;
 
-type ApiEnvelope = { error?: string };
+type ApiEnvelope = { error?: string; code?: string; accountId?: number };
+
+export class ApiError extends Error {
+  readonly code?: string;
+  readonly accountId?: number;
+
+  constructor(message: string, code?: string, accountId?: number) {
+    super(message);
+    this.name = "ApiError";
+    this.code = code;
+    this.accountId = accountId;
+  }
+}
+
+/** Dead OAuth grant signaled by the backend — prompt a reconnect. */
+export function reauthAccountId(cause: unknown): number | null {
+  if (cause instanceof ApiError && cause.code === "reauth_required") {
+    return typeof cause.accountId === "number" ? cause.accountId : -1;
+  }
+  return null;
+}
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
@@ -23,7 +43,11 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     const data = (await res.json().catch(() => null)) as ApiEnvelope | null;
-    throw new Error(data?.error ?? `Request failed (${res.status})`);
+    throw new ApiError(
+      data?.error ?? `Request failed (${res.status})`,
+      data?.code,
+      data?.accountId,
+    );
   }
 
   return res.json() as Promise<T>;

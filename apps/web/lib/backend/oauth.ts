@@ -79,6 +79,24 @@ export async function exchangeCode(config: GmailOAuthConfig, code: string) {
   };
 }
 
+/**
+ * Thrown when Google rejects the stored refresh token (`invalid_grant`:
+ * revoked, expired, or rotated). The grant is dead — retrying can't help —
+ * so clients must prompt the user to reconnect instead of showing a
+ * transient sync error.
+ */
+export class ReauthRequiredError extends Error {
+  readonly code = "reauth_required" as const;
+
+  constructor(
+    readonly accountId: number,
+    message = "Google revoked access to this mailbox. Reconnect Gmail to continue.",
+  ) {
+    super(message);
+    this.name = "ReauthRequiredError";
+  }
+}
+
 /** Exchange a stored refresh token for a fresh access token. */
 export async function refreshAccessToken(config: GmailOAuthConfig, refreshToken: string) {
   const body = new URLSearchParams({
@@ -96,7 +114,12 @@ export async function refreshAccessToken(config: GmailOAuthConfig, refreshToken:
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`Token refresh failed (${res.status}): ${text}`);
+    const error = new Error(`Token refresh failed (${res.status}): ${text}`);
+    // Google uses 400 + invalid_grant for dead grants (revoked/expired).
+    if (res.status === 400 && text.includes("invalid_grant")) {
+      (error as { code?: string }).code = "invalid_grant";
+    }
+    throw error;
   }
 
   const data = (await res.json()) as { access_token: string; expires_in: number };
@@ -142,7 +165,7 @@ export class GmailOAuthAuthProvider implements AuthProvider {
       }
     }
 
-    const { accessToken, expiresIn } = await refreshAccessToken(this.config, account.refreshToken);
+    const { accessToken, expiresIn } = await this.refreshForAccount(account);
 
     this.storage.setMeta(
       cacheKey,
@@ -150,5 +173,22 @@ export class GmailOAuthAuthProvider implements AuthProvider {
     );
 
     return accessToken;
+  }
+
+  private async refreshForAccount(
+    account: EmailAccount,
+  ): Promise<{ accessToken: string; expiresIn: number }> {
+    try {
+      return await refreshAccessToken(this.config, account.refreshToken);
+    } catch (cause) {
+      if ((cause as { code?: string } | null)?.code === "invalid_grant") {
+        // Drop the dead cached access token so nothing keeps retrying with
+        // it, then escalate to a typed error the API maps to a relogin
+        // prompt instead of a generic sync failure.
+        this.storage.deleteMeta(`oauth:access:${account.id}`);
+        throw new ReauthRequiredError(account.id);
+      }
+      throw cause;
+    }
   }
 }

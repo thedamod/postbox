@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import { notifyReauthRequired } from "@/lib/mail/thread-state";
 
 const POLL_INTERVAL_MS = 30_000;
 const INITIAL_DELAY_MS = 5_000;
@@ -36,7 +37,25 @@ export function SyncPoller({
         const res = await fetch(`/api/sync/${encodeURIComponent(accountId)}?wait=1`, {
           method: "POST",
         });
-        if (!res.ok) return;
+        if (!res.ok) {
+          // Dead grant: surface the reconnect banner instead of retrying
+          // silently every tick.
+          const data = (await res.json().catch(() => null)) as {
+            code?: string;
+            accountId?: number;
+          } | null;
+          if (data?.code === "reauth_required") {
+            const fallback = Number(accountId);
+            notifyReauthRequired(
+              typeof data.accountId === "number"
+                ? data.accountId
+                : Number.isInteger(fallback)
+                  ? fallback
+                  : null,
+            );
+          }
+          return;
+        }
         const data = (await res.json()) as { result?: { revision?: number } };
         const next = data.result?.revision;
         if (typeof next === "number" && next > revision.current) {

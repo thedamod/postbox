@@ -432,6 +432,10 @@ export class MobileStorage implements EmailStorage, AttachmentStore {
     );
   }
 
+  deleteMeta(key: string): void {
+    this.db.runSync(`DELETE FROM meta WHERE key = ?`, key);
+  }
+
   // ------------------------------------------------------------- messages
 
   getMessage(id: number): StoredMessage | null {
