@@ -29,7 +29,7 @@ import type { RootStackParamList } from "../../Stack";
 type Props = NativeStackScreenProps<RootStackParamList, "Settings">;
 
 export function SettingsScreen({ navigation }: Props) {
-  const { palette } = useTheme();
+  const { palette, preference: themePreference, setPreference: setThemePreference } = useTheme();
   const [accounts, setAccounts] = useState<EmailAccount[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
@@ -81,8 +81,7 @@ export function SettingsScreen({ navigation }: Props) {
     }
   };
 
-  const toggleNotifications = async () => {
-    haptics.selection();
+  const toggleNotifications = async () => {    haptics.selection();
     if (!isNotificationsAvailable()) {
       setError("Notifications need a development build — Expo Go can't show them.");
       return;
@@ -189,6 +188,35 @@ export function SettingsScreen({ navigation }: Props) {
               </AppText>
             </Pressable>
 
+            <AppText style={styles.sectionTitle}>Appearance</AppText>
+            <View style={styles.themeRow}>
+              {(["system", "light", "dark"] as const).map((option) => {
+                const selected = themePreference === option;
+                return (
+                  <Pressable
+                    key={option}
+                    onPress={() => {
+                      haptics.selection();
+                      setThemePreference(option);
+                    }}
+                    style={[
+                      styles.themeOption,
+                      { borderColor: selected ? palette.primary : palette.border },
+                    ]}
+                  >
+                    <AppText
+                      style={[
+                        styles.themeOptionLabel,
+                        selected && { color: palette.primary, fontWeight: "700" },
+                      ]}
+                    >
+                      {option}
+                    </AppText>
+                  </Pressable>
+                );
+              })}
+            </View>
+
             <Pressable
               onPress={() => {
                 haptics.selection();
@@ -274,4 +302,13 @@ const styles = StyleSheet.create({
   },
   toggleLabel: { fontSize: 14, fontWeight: "600" },
   toggleValue: { fontSize: 14, fontWeight: "700" },
+  themeRow: { flexDirection: "row", gap: 8, marginBottom: 16 },
+  themeOption: {
+    flex: 1,
+    borderRadius: 10,
+    borderWidth: 1,
+    paddingVertical: 10,
+    alignItems: "center",
+  },
+  themeOptionLabel: { fontSize: 13, fontWeight: "600", textTransform: "capitalize" },
 });

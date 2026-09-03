@@ -1,7 +1,7 @@
 import { NavigationContainer, type Theme } from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
-import { StyleSheet, View, useColorScheme } from "react-native";
+import { StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
@@ -15,6 +15,7 @@ import {
   installNotificationHandler,
 } from "./lib/notifications";
 import { RootStack } from "./Stack";
+import { useTheme } from "./theme";
 
 function navigationTheme(scheme: "light" | "dark"): Theme {
   const palette = scheme === "dark" ? dark : light;
@@ -39,7 +40,7 @@ function navigationTheme(scheme: "light" | "dark"): Theme {
 }
 
 export default function App() {
-  const scheme = useColorScheme() === "dark" ? "dark" : "light";
+  const { scheme } = useTheme();
   const fontsLoaded = useAppFonts();
 
   // Local-notification presentation, background mail sync (~15 min), and a

@@ -55,7 +55,7 @@ export function MessageBody({ html, text }: { html?: string | null; text?: strin
           </button>
         )}
         <div
-          className="mail-body max-w-none text-sm leading-relaxed"
+          className="mail-body mail-body-paper max-w-none text-sm leading-relaxed"
           dangerouslySetInnerHTML={{ __html: sanitized }}
         />
       </div>
