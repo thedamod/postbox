@@ -88,6 +88,24 @@ export function storedThreadToDetail(
   };
 }
 
+/** Map a list-API `StoredThread` row (no messages) to a list item. */
+export function storedThreadRowToView(thread: StoredThread, view: string): Thread {
+  const from = thread.lastFrom?.[0];
+  return {
+    id: String(thread.id),
+    folder: view,
+    subject: thread.subject || "(no subject)",
+    from: { name: from?.name || from?.address || "(unknown)", email: from?.address || "" },
+    snippet: thread.snippet || "",
+    date: thread.lastMessageAt || new Date(0).toISOString(),
+    unread: (thread.unreadCount ?? 0) > 0,
+    favorite: false,
+    collectionIds: [],
+    hasAttachment: false,
+    messageCount: thread.messageCount ?? 1,
+  };
+}
+
 /** Storage folder filter for a view; null = all mail. */
 export function storageFolderForView(view: string): string | null | undefined {
   if (view.startsWith("collection:")) return undefined;

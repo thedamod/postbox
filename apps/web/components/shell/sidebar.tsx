@@ -52,16 +52,14 @@ type SidebarProps = {
   account: MailAccount;
   counts: FolderCounts;
   collections: MailCollection[];
-  activeFolder: MailViewId;
 };
 
 /**
  * Inbox sidebar (mirrors redakt `sidebar.tsx`): account switcher, compose
  * entry point, folder nav with counts, label collections, settings link.
  */
-export function Sidebar({ accounts, account, counts, collections, activeFolder }: SidebarProps) {
-  const { openThread } = useMailShell();
-  void openThread;
+export function Sidebar({ accounts, account, counts, collections }: SidebarProps) {
+  const { activeFolder } = useMailShell();
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const folders = mailFoldersForAccount();
 
