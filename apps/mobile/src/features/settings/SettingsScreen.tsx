@@ -21,6 +21,7 @@ import { API_BASE_URL, mailApi } from "../../lib/api";
 import {
   areNotificationsEnabled,
   ensureNotificationPermission,
+  isNotificationsAvailable,
   setNotificationsEnabled,
 } from "../../lib/notifications";
 import type { RootStackParamList } from "../../Stack";
@@ -82,6 +83,10 @@ export function SettingsScreen({ navigation }: Props) {
 
   const toggleNotifications = async () => {
     haptics.selection();
+    if (!isNotificationsAvailable()) {
+      setError("Notifications need a development build — Expo Go can't show them.");
+      return;
+    }
     if (!notificationsOn) {
       const granted = await ensureNotificationPermission();
       if (!granted) {
@@ -180,7 +185,7 @@ export function SettingsScreen({ navigation }: Props) {
             >
               <AppText style={styles.toggleLabel}>New mail notifications</AppText>
               <AppText style={[styles.toggleValue, { color: palette.primary }]}>
-                {notificationsOn ? "On" : "Off"}
+                {!isNotificationsAvailable() ? "N/A" : notificationsOn ? "On" : "Off"}
               </AppText>
             </Pressable>
 

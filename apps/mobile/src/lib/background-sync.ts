@@ -1,5 +1,5 @@
-import * as BackgroundFetch from "expo-background-fetch";
-import * as TaskManager from "expo-task-manager";
+import type * as BackgroundFetch from "expo-background-fetch";
+import type * as TaskManager from "expo-task-manager";
 
 import { API_BASE_URL } from "./api";
 import {
@@ -11,6 +11,8 @@ import {
 } from "./notifications";
 
 export const MAIL_SYNC_TASK = "postbox-mail-sync";
+
+declare const require: (moduleId: string) => any;
 
 type SyncPreviewShape = {
   messageId: number;
@@ -33,6 +35,28 @@ type SyncAccountShape = {
   error?: string;
 };
 
+type FetchResult = BackgroundFetch.BackgroundFetchResult;
+
+function loadBackgroundFetch(): typeof BackgroundFetch | null {
+  try {
+    return require("expo-background-fetch") as typeof BackgroundFetch;
+  } catch {
+    return null;
+  }
+}
+
+function resultOf(
+  backgroundFetch: typeof BackgroundFetch | null,
+  foundNew: boolean,
+): FetchResult {
+  // BackgroundFetchResult is an enum; fall back to a raw value when the
+  // native module is unavailable (shouldn't happen inside a running task).
+  if (!backgroundFetch) return "failed" as unknown as FetchResult;
+  return foundNew
+    ? backgroundFetch.BackgroundFetchResult.NewData
+    : backgroundFetch.BackgroundFetchResult.NoData;
+}
+
 /**
  * Background entry point: sync every account through the server's sync
  * engine (which reports changed/revision + fresh-arrival previews) and
@@ -41,10 +65,16 @@ type SyncAccountShape = {
  * Runs on iOS background-fetch and Android headless JS; must stay short,
  * dependency-free, and total (never throw out).
  */
-export async function runBackgroundMailSync(): Promise<BackgroundFetch.BackgroundFetchResult> {
+export async function runBackgroundMailSync(): Promise<FetchResult> {
+  const backgroundFetch = loadBackgroundFetch();
+  const failed = () =>
+    backgroundFetch
+      ? backgroundFetch.BackgroundFetchResult.Failed
+      : ("failed" as unknown as FetchResult);
+
   try {
     const accountsRes = await fetch(`${API_BASE_URL}/api/accounts`);
-    if (!accountsRes.ok) return BackgroundFetch.BackgroundFetchResult.Failed;
+    if (!accountsRes.ok) return failed();
     const { accounts } = (await accountsRes.json()) as {
       accounts: Array<{ id: number }>;
     };
@@ -81,34 +111,46 @@ export async function runBackgroundMailSync(): Promise<BackgroundFetch.Backgroun
       }
     }
 
-    return foundNew
-      ? BackgroundFetch.BackgroundFetchResult.NewData
-      : BackgroundFetch.BackgroundFetchResult.NoData;
+    return resultOf(backgroundFetch, foundNew);
   } catch {
-    return BackgroundFetch.BackgroundFetchResult.Failed;
+    return failed();
   }
 }
 
-TaskManager.defineTask(MAIL_SYNC_TASK, async () => {
-  try {
-    return await runBackgroundMailSync();
-  } catch {
-    return BackgroundFetch.BackgroundFetchResult.Failed;
-  }
-});
+let taskDefined = false;
 
-/** ~15 min cadence; survives reboot and app termination where the OS allows. */
-export async function registerBackgroundMailSync(): Promise<void> {
+/**
+ * Define + register the periodic sync task. Safe to call in Expo Go: the
+ * native modules are required lazily, and anything missing degrades to a
+ * no-op (foreground sync in the inbox still drives notifications while the
+ * app is open).
+ */
+export async function setupBackgroundMailSync(): Promise<void> {
   try {
-    const registered = await TaskManager.isTaskRegisteredAsync(MAIL_SYNC_TASK);
+    const taskManager = require("expo-task-manager") as typeof TaskManager;
+    const backgroundFetch = loadBackgroundFetch();
+    if (!backgroundFetch) return;
+
+    if (!taskDefined) {
+      taskDefined = true;
+      taskManager.defineTask(MAIL_SYNC_TASK, async () => {
+        try {
+          return await runBackgroundMailSync();
+        } catch {
+          return backgroundFetch.BackgroundFetchResult.Failed;
+        }
+      });
+    }
+
+    const registered = await taskManager.isTaskRegisteredAsync(MAIL_SYNC_TASK);
     if (registered) return;
-    await BackgroundFetch.registerTaskAsync(MAIL_SYNC_TASK, {
+    await backgroundFetch.registerTaskAsync(MAIL_SYNC_TASK, {
       minimumInterval: 15 * 60,
       stopOnTerminate: false,
       startOnBoot: true,
     });
   } catch {
-    // Background execution unavailable (e.g. simulator) — foreground sync
-    // in the inbox still drives notifications while the app is open.
+    // Background execution unavailable — foreground sync still covers the
+    // open-app case.
   }
 }

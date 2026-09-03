@@ -8,7 +8,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { dark, light } from "@postbox/ui/tokens";
 
 import { appFonts, useAppFonts } from "./fonts";
-import { registerBackgroundMailSync } from "./lib/background-sync";
+import { setupBackgroundMailSync } from "./lib/background-sync";
 import {
   areNotificationsEnabled,
   ensureNotificationPermission,
@@ -43,10 +43,11 @@ export default function App() {
   const fontsLoaded = useAppFonts();
 
   // Local-notification presentation, background mail sync (~15 min), and a
-  // first-launch permission prompt when notifications are enabled.
+  // first-launch permission prompt when notifications are enabled. All native
+  // modules load lazily so the app also runs inside Expo Go.
   useEffect(() => {
     installNotificationHandler();
-    void registerBackgroundMailSync();
+    void setupBackgroundMailSync();
     void areNotificationsEnabled().then((enabled) => {
       if (enabled) void ensureNotificationPermission();
     });
