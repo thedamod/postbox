@@ -1,13 +1,21 @@
 import { NavigationContainer, type Theme } from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
-import { StyleSheet, View, useColorScheme } from "react-native";
+import { useEffect } from "react";
+import { StyleSheet, View } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { dark, light } from "@postbox/ui/tokens";
 
 import { appFonts, useAppFonts } from "./fonts";
+import { setupBackgroundMailSync } from "./lib/background-sync";
+import {
+  areNotificationsEnabled,
+  ensureNotificationPermission,
+  installNotificationHandler,
+} from "./lib/notifications";
 import { RootStack } from "./Stack";
+import { useTheme } from "./theme";
 
 function navigationTheme(scheme: "light" | "dark"): Theme {
   const palette = scheme === "dark" ? dark : light;
@@ -32,8 +40,19 @@ function navigationTheme(scheme: "light" | "dark"): Theme {
 }
 
 export default function App() {
-  const scheme = useColorScheme() === "dark" ? "dark" : "light";
+  const { scheme } = useTheme();
   const fontsLoaded = useAppFonts();
+
+  // Local-notification presentation, background mail sync (~15 min), and a
+  // first-launch permission prompt when notifications are enabled. All native
+  // modules load lazily so the app also runs inside Expo Go.
+  useEffect(() => {
+    installNotificationHandler();
+    void setupBackgroundMailSync();
+    void areNotificationsEnabled().then((enabled) => {
+      if (enabled) void ensureNotificationPermission();
+    });
+  }, []);
 
   return (
     <GestureHandlerRootView style={styles.root}>

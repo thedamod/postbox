@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { getBackend } from "./backend/mail-client";
+import { ReauthRequiredError } from "./backend/oauth";
 import type { EmailAccount } from "@postbox/email-client";
 
 export { getBackend };
@@ -32,6 +33,14 @@ export function ok(data: unknown, status = 200) {
 }
 
 export function fail(error: unknown) {
+  if (error instanceof ReauthRequiredError) {
+    // Dead OAuth grant: clients prompt a reconnect instead of treating this
+    // as a transient failure.
+    return NextResponse.json(
+      { error: error.message, code: error.code, accountId: error.accountId },
+      { status: 401 },
+    );
+  }
   if (error instanceof ApiError) {
     return NextResponse.json({ error: error.message }, { status: error.status });
   }

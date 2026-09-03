@@ -397,3 +397,86 @@ body {
   border-top: 1px solid var(--border);
   margin: 1rem 0;
 }
+
+/* HTML email on a light sheet, identical in both app modes: the message
+   renders as authored, so every client shows the same email. Authored inline
+   styles still win; these rules only give unstyled elements readable ink.
+   (Plain-text bodies keep the themed .mail-body above.) */
+.mail-body-paper {
+  background: #ffffff;
+  color: #202124;
+  border-radius: 12px;
+  padding: 16px 18px;
+}
+.mail-body-paper a {
+  color: #1a73e8;
+}
+.mail-body-paper h1,
+.mail-body-paper h2,
+.mail-body-paper h3 {
+  color: #202124;
+}
+.mail-body-paper blockquote {
+  border-left-color: #dadce0;
+  color: #5f6368;
+}
+.mail-body-paper pre {
+  background: #f1f3f4;
+}
+.mail-body-paper td,
+.mail-body-paper th {
+  border-color: #dadce0;
+}
+.mail-body-paper hr {
+  border-top-color: #dadce0;
+}
+
+/* Dark viewer: invert the light sheet so mail follows the app theme.
+   Pixels stay true via counter-inversion (invert + hue-rotate preserves
+   hue while flipping lightness). Tradeoff: mail authored on a dark
+   background flips light — the sheet default wins for consistency. */
+.dark .mail-body-paper {
+  filter: invert(1) hue-rotate(180deg);
+}
+.dark .mail-body-paper img,
+.dark .mail-body-paper video,
+.dark .mail-body-paper picture,
+.dark .mail-body-paper svg,
+.dark .mail-body-paper canvas {
+  filter: invert(1) hue-rotate(180deg);
+}
+
+/* Embedded media downgraded to an explicit open/download link (see
+   replaceMediaWithLinks): players render broken and would bypass the
+   pixel proxy, so the viewer shows a card with the file name instead. */
+.mail-body-paper .mail-media {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  margin: 0.75rem 0;
+  padding: 10px 14px;
+  border: 1px solid #dadce0;
+  border-radius: 10px;
+  background: #f1f3f4;
+  color: #202124;
+  text-decoration: none;
+}
+.mail-body-paper .mail-media-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex-shrink: 0;
+  border-radius: 9999px;
+  background: #1a73e8;
+  color: #ffffff;
+  font-size: 14px;
+}
+.mail-body-paper .mail-media-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}

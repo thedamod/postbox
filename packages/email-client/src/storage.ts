@@ -120,6 +120,17 @@ export interface EmailStorage {
   saveSyncState(state: SyncState): void;
   clearSyncState(accountId: number, folder: string): void;
 
+  // ------------------------------------------------------------ key/value
+
+  /**
+   * Host-provided string store (sync revisions, seeds, token caches).
+   * The sync engine persists its per-account revision here so clients can
+   * poll cheaply for changes.
+   */
+  getMeta(key: string): string | null;
+  setMeta(key: string, value: string): void;
+  deleteMeta(key: string): void;
+
   // ------------------------------------------------------------- messages
 
   getMessage(id: number): StoredMessage | null;

@@ -1,4 +1,4 @@
-import { useWindowDimensions } from "react-native";
+import { useWindowDimensions, View } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import RenderHtml, {
   defaultHTMLElementModels,
@@ -8,9 +8,18 @@ import RenderHtml, {
   type MixedStyleDeclaration,
 } from "react-native-render-html";
 
-import { withAlpha } from "../lib/color";
+import { rewriteRemoteImageSources, replaceMediaWithLinks } from "@postbox/email-client/domain";
+
+import { API_BASE_URL } from "../lib/api";
 import { useTheme } from "../theme";
 import { AppText } from "./AppText";
+
+// Paper ink shared with the web client's mail-body-paper treatment.
+const EMAIL_INK = "#202124";
+const EMAIL_MUTED = "#5f6368";
+const EMAIL_LINE = "#dadce0";
+const EMAIL_LINK = "#1a73e8";
+const EMAIL_CODE_BG = "#f1f3f4";
 
 type HtmlEmailProps = {
   html: string | null;
@@ -113,12 +122,14 @@ const tableElementModels = {
 
 /**
  * Renders an email body. When the message has an `html` part it is rendered
- * faithfully via react-native-render-html (links open in the in-app browser);
- * otherwise the plain text part is shown.
+ * as authored on a light sheet — identical in both app modes, matching the
+ * web client's paper treatment — so the same message looks the same
+ * everywhere (links open in the in-app browser); otherwise the plain text
+ * part is shown in themed ink.
  */
 export function HtmlEmail({ html, text }: HtmlEmailProps) {
   const { width } = useWindowDimensions();
-  const { palette, fonts } = useTheme();
+  const { fonts } = useTheme();
 
   if (!html) {
      return <AppText style={{ fontSize: 17, lineHeight: 26 }}>{text ?? "(no body)"}</AppText>;
@@ -129,42 +140,57 @@ export function HtmlEmail({ html, text }: HtmlEmailProps) {
     paddingHorizontal: 6,
   };
 
+  // Paper treatment: light sheet + ink defaults shared with the web client.
+  // Authored inline styles still override these, as on the web. Remote
+  // pixels go through the privacy-safe image proxy so they simply load.
+  const paper = {
+    backgroundColor: "#ffffff",
+    borderRadius: 12,
+    padding: 16,
+  };
+
+  const proxiedHtml = rewriteRemoteImageSources(
+    replaceMediaWithLinks(html),
+    (url) => `${API_BASE_URL}/api/image?url=${encodeURIComponent(url)}`,
+  );
+
   return (
+    <View style={paper}>
     <RenderHtml
-      contentWidth={width}
-      source={{ html }}
+      contentWidth={width - 32}
+      source={{ html: proxiedHtml }}
       systemFonts={[...defaultSystemFonts, fonts.regular, fonts.medium, fonts.bold]}
       customHTMLElementModels={{
         font: fontElementModel,
         ...tableElementModels,
       }}
       baseStyle={{
-        color: palette.foreground,
+        color: EMAIL_INK,
         fontFamily: fonts.regular,
          fontSize: 17,
          lineHeight: 26,
       }}
       tagsStyles={{
-        a: { color: palette.primary, textDecorationLine: "underline" },
-        h1: { fontSize: 22, fontFamily: fonts.bold },
-        h2: { fontSize: 19, fontFamily: fonts.bold },
-        h3: { fontSize: 17, fontFamily: fonts.medium },
+        a: { color: EMAIL_LINK, textDecorationLine: "underline" },
+        h1: { fontSize: 22, fontFamily: fonts.bold, color: EMAIL_INK },
+        h2: { fontSize: 19, fontFamily: fonts.bold, color: EMAIL_INK },
+        h3: { fontSize: 17, fontFamily: fonts.medium, color: EMAIL_INK },
         p: { marginVertical: 4 },
         blockquote: {
           borderLeftWidth: 3,
-          borderLeftColor: palette.border,
+          borderLeftColor: EMAIL_LINE,
           paddingLeft: 12,
           marginLeft: 0,
-          color: palette.mutedForeground,
+          color: EMAIL_MUTED,
         },
         img: { borderRadius: 8 },
-        table: { borderWidth: 1, borderColor: palette.border },
-        tr: { borderBottomWidth: 1, borderBottomColor: palette.border },
+        table: { borderWidth: 1, borderColor: EMAIL_LINE },
+        tr: { borderBottomWidth: 1, borderBottomColor: EMAIL_LINE },
         td: cellStyle,
         th: {
           ...cellStyle,
           fontWeight: "700",
-          backgroundColor: withAlpha(palette.muted, 0.6),
+          backgroundColor: EMAIL_CODE_BG,
         },
       }}
       defaultTextProps={{ selectable: true }}
@@ -176,5 +202,6 @@ export function HtmlEmail({ html, text }: HtmlEmailProps) {
         },
       }}
     />
+    </View>
   );
 }

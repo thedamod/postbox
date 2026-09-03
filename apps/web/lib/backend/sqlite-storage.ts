@@ -1155,6 +1155,10 @@ export class NodeMailStorage implements EmailStorage, AttachmentStore {
       .run(key, value);
   }
 
+  deleteMeta(key: string): void {
+    this.db.prepare(`DELETE FROM meta WHERE key = ?`).run(key);
+  }
+
   private transaction(fn: () => void): void {
     this.db.exec("BEGIN");
     try {

@@ -13,7 +13,27 @@ const BASE_URL = (process.env.EXPO_PUBLIC_API_URL ?? "http://localhost:8080").re
 
 export const API_BASE_URL = BASE_URL;
 
-type ApiEnvelope = { error?: string };
+type ApiEnvelope = { error?: string; code?: string; accountId?: number };
+
+export class ApiError extends Error {
+  readonly code?: string;
+  readonly accountId?: number;
+
+  constructor(message: string, code?: string, accountId?: number) {
+    super(message);
+    this.name = "ApiError";
+    this.code = code;
+    this.accountId = accountId;
+  }
+}
+
+/** Dead OAuth grant signaled by the backend — prompt a reconnect. */
+export function reauthAccountId(cause: unknown): number | null {
+  if (cause instanceof ApiError && cause.code === "reauth_required") {
+    return typeof cause.accountId === "number" ? cause.accountId : -1;
+  }
+  return null;
+}
 
 async function api<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
@@ -23,7 +43,11 @@ async function api<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!res.ok) {
     const data = (await res.json().catch(() => null)) as ApiEnvelope | null;
-    throw new Error(data?.error ?? `Request failed (${res.status})`);
+    throw new ApiError(
+      data?.error ?? `Request failed (${res.status})`,
+      data?.code,
+      data?.accountId,
+    );
   }
 
   return res.json() as Promise<T>;
@@ -45,6 +69,35 @@ export type ComposeInput = {
   text?: string;
   html?: string;
   attachments?: OutgoingAttachmentInput[];
+};
+
+export type SyncPreview = {
+  messageId: number;
+  subject: string;
+  from: string;
+  snippet: string;
+};
+
+export type SyncFolderResult = {
+  path: string;
+  newMessages: number;
+  lastUid: number;
+  flagsChanged: number;
+  previews: SyncPreview[];
+};
+
+export type SyncAccountResult = {
+  account: string;
+  folders: SyncFolderResult[];
+  changed: boolean;
+  revision: number;
+  error?: string;
+};
+
+export type SyncState = {
+  revision: number;
+  lastSyncAt: string | null;
+  exists: boolean;
 };
 
 export const mailApi = {
@@ -83,10 +136,16 @@ export const mailApi = {
     });
   },
 
-  sync(accountId: number, folder?: string | null): Promise<{ result: unknown }> {
+  sync(accountId: number, folder?: string | null): Promise<{ result: SyncAccountResult }> {
     const params = new URLSearchParams({ wait: "1" });
     if (folder) params.set("folder", folder);
     return api(`/api/sync/${accountId}?${params}`, { method: "POST" });
+  },
+
+  /** Cheap revision poll — no provider I/O, safe to call on every resume. */
+  syncState(accountId: number): Promise<SyncState> {
+    const params = new URLSearchParams({ accountId: String(accountId) });
+    return api(`/api/sync/state?${params}`);
   },
 
   async waitForSync(jobId: string): Promise<void> {
@@ -107,7 +166,7 @@ export const mailApi = {
     throw new Error("Sync is still running. The inbox will update when you return.");
   },
 
-  syncMore(accountId: number, folder?: string | null): Promise<{ result: unknown }> {
+  syncMore(accountId: number, folder?: string | null): Promise<{ result: SyncAccountResult }> {
     const params = new URLSearchParams({ wait: "1" });
     if (folder) params.set("folder", folder);
     return api(`/api/sync/${accountId}/older?${params}`, { method: "POST" });

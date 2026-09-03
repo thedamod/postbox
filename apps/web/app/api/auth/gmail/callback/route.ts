@@ -66,6 +66,10 @@ export async function GET(request: NextRequest) {
     const account = storage.listAccounts().find((a) => a.email === profile.email);
     if (!account) return redirectWithError("Connected, but the account wasn't stored.");
 
+    // Drop any stale cached access token so the fresh grant takes effect
+    // immediately instead of lingering until expiry.
+    storage.deleteMeta(`oauth:access:${account.id}`);
+
     // Warm the access-token cache now, then kick off the first sync.
     const { client } = getBackend();
     try {

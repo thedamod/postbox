@@ -9,7 +9,10 @@
     "scheme": "mail",
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.example.mail"
+      "bundleIdentifier": "com.example.mail",
+      "infoPlist": {
+        "UIBackgroundModes": ["fetch"]
+      }
     },
     "icon": "./assets/icon.svg",
     "android": {
@@ -25,7 +28,8 @@
     "plugins": [
       "expo-sharing",
       "expo-web-browser",
-      "expo-font"
+      "expo-font",
+      "expo-notifications"
     ]
   }
 }
