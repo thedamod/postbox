@@ -7,6 +7,7 @@ export * from "./deps";
 export * from "./sync";
 export * from "./search";
 export * from "./client";
+export * from "./render";
 
 export * from "./mail/folders";
 export * from "./mail/messages";

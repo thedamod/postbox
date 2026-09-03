@@ -1,4 +1,4 @@
-import { View, useWindowDimensions } from "react-native";
+import { useWindowDimensions, View } from "react-native";
 import * as WebBrowser from "expo-web-browser";
 import RenderHtml, {
   defaultHTMLElementModels,
@@ -8,6 +8,9 @@ import RenderHtml, {
   type MixedStyleDeclaration,
 } from "react-native-render-html";
 
+import { rewriteRemoteImageSources } from "@postbox/email-client/domain";
+
+import { API_BASE_URL } from "../lib/api";
 import { useTheme } from "../theme";
 import { AppText } from "./AppText";
 
@@ -138,18 +141,24 @@ export function HtmlEmail({ html, text }: HtmlEmailProps) {
   };
 
   // Paper treatment: light sheet + ink defaults shared with the web client.
-  // Authored inline styles still override these, as on the web.
+  // Authored inline styles still override these, as on the web. Remote
+  // pixels go through the privacy-safe image proxy so they simply load.
   const paper = {
     backgroundColor: "#ffffff",
     borderRadius: 12,
     padding: 16,
   };
 
+  const proxiedHtml = rewriteRemoteImageSources(
+    html,
+    (url) => `${API_BASE_URL}/api/image?url=${encodeURIComponent(url)}`,
+  );
+
   return (
     <View style={paper}>
     <RenderHtml
       contentWidth={width - 32}
-      source={{ html }}
+      source={{ html: proxiedHtml }}
       systemFonts={[...defaultSystemFonts, fonts.regular, fonts.medium, fonts.bold]}
       customHTMLElementModels={{
         font: fontElementModel,
