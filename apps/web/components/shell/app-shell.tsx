@@ -17,6 +17,7 @@ import {
   type WorkspaceTab,
 } from "@/lib/mail/workspace-tabs";
 import { ComposerProvider } from "./composer";
+import { SyncPoller } from "./sync-poller";
 
 export type MailShellValue = {
   account: MailAccount;
@@ -43,6 +44,7 @@ type AppShellProps = {
   accounts: MailAccount[];
   counts: FolderCounts;
   collections: MailCollection[];
+  initialRevision: number;
   children: ReactNode;
 };
 
@@ -51,7 +53,7 @@ type AppShellProps = {
  * and composer state live here. Route data arrives as props from the
  * account layout; navigation and search state stay in the URL.
  */
-export function AppShell({ account, accounts, counts, collections, children }: AppShellProps) {
+export function AppShell({ account, accounts, counts, collections, initialRevision, children }: AppShellProps) {
   const router = useRouter();
   const pathname = usePathname();
   const [tabs, setTabs] = useState<WorkspaceTab[]>(() => loadWorkspaceTabs(account.id));
@@ -147,6 +149,7 @@ export function AppShell({ account, accounts, counts, collections, children }: A
   return (
     <MailShellContext.Provider value={value}>
       <ComposerProvider account={account}>
+        <SyncPoller accountId={account.id} initialRevision={initialRevision} />
         <div className="flex h-dvh overflow-hidden bg-background text-foreground">
           {children}
         </div>

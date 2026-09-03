@@ -17,7 +17,7 @@ export async function POST(request: NextRequest, { params }: Ctx) {
       return ok({ result });
     }
 
-    const job = client.sync.startSyncMore(accountId);
+    const job = client.sync.startSyncMore(accountId, folder);
     return ok({ job });
   } catch (error) {
     return fail(error);

@@ -7,6 +7,7 @@ import {
   loadFolderCounts,
   loadMailAccounts,
   loadMailCollections,
+  loadSyncRevision,
 } from "@/lib/mail/server";
 
 export const dynamic = "force-dynamic";
@@ -27,13 +28,14 @@ export default async function MailAccountLayout({ children, params }: LayoutProp
   const account = accounts.find((candidate) => candidate.id === accountId);
   if (!account) notFound();
 
-  const [counts, collections] = await Promise.all([
+  const [counts, collections, initialRevision] = await Promise.all([
     loadFolderCounts(account.id),
     loadMailCollections(account.id),
+    loadSyncRevision(account.id),
   ]);
 
   return (
-    <AppShell account={account} accounts={accounts} counts={counts} collections={collections}>
+    <AppShell account={account} accounts={accounts} counts={counts} collections={collections} initialRevision={initialRevision}>
       <Sidebar accounts={accounts} account={account} counts={counts} collections={collections} />
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <WorkspaceTabs />

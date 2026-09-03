@@ -97,14 +97,21 @@ export function FolderView({
         setHasMore(rows.length > threads.length + 50);
       } else {
         const def = folderDefForView(folder);
-        const page = await api<ThreadsPage>(
-          threadsPath({
-            accountId,
-            folder: def?.storageFolder,
-            limit: 50,
-            offset: threads.length,
-          }),
-        );
+        const storageFolder = def?.storageFolder ?? undefined;
+        const fetchPage = (offset: number) =>
+          api<ThreadsPage>(
+            threadsPath({ accountId, folder: storageFolder, limit: 50, offset }),
+          );
+        let page = await fetchPage(threads.length);
+        // The list can report more rows than are synced locally when older
+        // mail still waits on the provider. Backfill one window and re-read
+        // instead of showing a dead "load more" button.
+        if (page.threads.length === 0 && (page.hasMore || hasMore)) {
+          await fetch(`/api/sync/${encodeURIComponent(accountId)}/older?wait=1`, {
+            method: "POST",
+          }).catch(() => null);
+          page = await fetchPage(threads.length);
+        }
         setThreads((prev) => [
           ...prev,
           ...page.threads.map((row) => storedThreadRowToView(row, folder)),

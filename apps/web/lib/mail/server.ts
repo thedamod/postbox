@@ -1,4 +1,6 @@
 import { cache } from "react";
+import { readAccountSyncState } from "@postbox/email-client";
+import { getBackend } from "@/lib/backend/mail-client";
 import { getMailProvider, listMailAccounts } from "./get-provider";
 import type {
   FolderCounts,
@@ -55,5 +57,14 @@ export const loadMailCollections = cache(
   async (accountId: string | null): Promise<MailCollection[]> => {
     const provider = getMailProvider(accountId);
     return provider.listCollections();
+  },
+);
+
+export const loadSyncRevision = cache(
+  async (accountId: string | null): Promise<number> => {
+    const provider = getMailProvider(accountId);
+    const numeric = Number(provider.account.id);
+    if (!Number.isInteger(numeric) || numeric <= 0) return 0;
+    return readAccountSyncState(getBackend().client.deps, numeric).revision;
   },
 );
