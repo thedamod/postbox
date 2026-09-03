@@ -37,6 +37,13 @@ import { GlassView } from "../../components/GlassView";
 import { SenderAvatar } from "../../components/SenderAvatar";
 import { mailApi } from "../../lib/api";
 import { haptics } from "../../lib/haptics";
+import {
+  addNotificationTapListener,
+  getLastNotifiedId,
+  notifyNewMail,
+  setLastNotifiedId,
+  unseenPreviews,
+} from "../../lib/notifications";
 import type { RootStackParamList } from "../../Stack";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Inbox">;
@@ -129,6 +136,8 @@ export function InboxScreen({ navigation }: Props) {
   const searchRequest = useRef(0);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastResumeSync = useRef(0);
+  // Message ids already surfaced as notifications this session.
+  const notifiedIds = useRef<Set<number>>(new Set());
 
   const PAGE_SIZE = 50;
 
@@ -207,18 +216,40 @@ export function InboxScreen({ navigation }: Props) {
     }
   }, [hasMore, loadingMore, rows.length, searching, accountId, folder, toRows]);
 
-  const syncNow = async (accountArg = accountId, folderArg = folder) => {
+  const syncNow = async (accountArg = accountId, folderArg = folder, opts?: { notify?: boolean }) => {
     haptics.impact();
     setSyncing(true);
     try {
       await load(accountArg, folderArg);
-      void mailApi.sync(accountArg, folderArg)
-        .then(() => load(accountArg, folderArg).then(() => haptics.success()))
-        .catch((cause) => {
-          haptics.error();
-          setError(cause instanceof Error ? cause.message : String(cause));
-        })
-        .finally(() => setSyncing(false));
+      try {
+        const { result } = await mailApi.sync(accountArg, folderArg);
+        await load(accountArg, folderArg);
+        haptics.success();
+        // Fresh-arrival previews drive notifications. Only the inbox pages
+        // the user — Sent/Drafts/Trash arrivals (e.g. our own sends) stay
+        // silent. Manual refreshes advance the watermark without buzzing;
+        // only background/resume syncs notify.
+        if (result?.changed) {
+          const arrivals = (result.folders ?? [])
+            .filter((entry) => entry.path === "INBOX")
+            .flatMap((entry) => entry.previews ?? []);
+          if (arrivals.length > 0) {
+            const lastNotified = await getLastNotifiedId(accountArg);
+            const fresh = unseenPreviews(arrivals, lastNotified, notifiedIds.current);
+            for (const preview of fresh) notifiedIds.current.add(preview.messageId);
+            if (fresh.length > 0) {
+              const maxId = Math.max(...fresh.map((preview) => preview.messageId));
+              await setLastNotifiedId(accountArg, maxId);
+              if (opts?.notify) await notifyNewMail(accountArg, fresh);
+            }
+          }
+        }
+      } catch (cause) {
+        haptics.error();
+        setError(cause instanceof Error ? cause.message : String(cause));
+      } finally {
+        setSyncing(false);
+      }
       return;
     } catch (cause) {
       haptics.error();
@@ -232,11 +263,19 @@ export function InboxScreen({ navigation }: Props) {
     const subscription = AppState.addEventListener("change", (nextState) => {
       if (nextState !== "active" || Date.now() - lastResumeSync.current < 120_000) return;
       lastResumeSync.current = Date.now();
-      void syncNow();
+      void syncNow(accountId, folder, { notify: true });
     });
 
     return () => subscription.remove();
   }, [accountId, folder]);
+
+  // Notification taps deep-link into the conversation.
+  useEffect(() => {
+    const listener = addNotificationTapListener(({ messageId }) => {
+      navigation.navigate("Message", { messageId });
+    });
+    return () => listener.remove();
+  }, [navigation]);
 
   useEffect(() => {
     return () => {

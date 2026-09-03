@@ -18,6 +18,11 @@ import { GlassView } from "../../components/GlassView";
 import { SenderAvatar } from "../../components/SenderAvatar";
 import { haptics } from "../../lib/haptics";
 import { API_BASE_URL, mailApi } from "../../lib/api";
+import {
+  areNotificationsEnabled,
+  ensureNotificationPermission,
+  setNotificationsEnabled,
+} from "../../lib/notifications";
 import type { RootStackParamList } from "../../Stack";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Settings">;
@@ -28,6 +33,7 @@ export function SettingsScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notificationsOn, setNotificationsOn] = useState(true);
 
   useFocusEffect(
     useCallback(() => {
@@ -45,6 +51,10 @@ export function SettingsScreen({ navigation }: Props) {
           if (!cancelled) setLoading(false);
         }
       })();
+
+      void areNotificationsEnabled().then((enabled) => {
+        if (!cancelled) setNotificationsOn(enabled);
+      });
 
       return () => {
         cancelled = true;
@@ -68,6 +78,20 @@ export function SettingsScreen({ navigation }: Props) {
     } finally {
       setSyncing(false);
     }
+  };
+
+  const toggleNotifications = async () => {
+    haptics.selection();
+    if (!notificationsOn) {
+      const granted = await ensureNotificationPermission();
+      if (!granted) {
+        setError("Allow notifications in system settings, then try again.");
+        return;
+      }
+    }
+    const next = !notificationsOn;
+    await setNotificationsEnabled(next);
+    setNotificationsOn(next);
   };
 
   const connectGmail = async () => {
@@ -147,6 +171,20 @@ export function SettingsScreen({ navigation }: Props) {
             </Pressable>
 
             <Pressable
+              onPress={() => void toggleNotifications()}
+              style={({ pressed }) => [
+                styles.toggleRow,
+                { borderColor: palette.border },
+                pressed && { opacity: 0.7 },
+              ]}
+            >
+              <AppText style={styles.toggleLabel}>New mail notifications</AppText>
+              <AppText style={[styles.toggleValue, { color: palette.primary }]}>
+                {notificationsOn ? "On" : "Off"}
+              </AppText>
+            </Pressable>
+
+            <Pressable
               onPress={() => {
                 haptics.selection();
                 navigation.goBack();
@@ -220,4 +258,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   backLabel: { fontSize: 14, fontWeight: "600" },
+  toggleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+  },
+  toggleLabel: { fontSize: 14, fontWeight: "600" },
+  toggleValue: { fontSize: 14, fontWeight: "700" },
 });

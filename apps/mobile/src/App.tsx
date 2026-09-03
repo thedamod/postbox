@@ -1,5 +1,6 @@
 import { NavigationContainer, type Theme } from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
+import { useEffect } from "react";
 import { StyleSheet, View, useColorScheme } from "react-native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -7,6 +8,12 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { dark, light } from "@postbox/ui/tokens";
 
 import { appFonts, useAppFonts } from "./fonts";
+import { registerBackgroundMailSync } from "./lib/background-sync";
+import {
+  areNotificationsEnabled,
+  ensureNotificationPermission,
+  installNotificationHandler,
+} from "./lib/notifications";
 import { RootStack } from "./Stack";
 
 function navigationTheme(scheme: "light" | "dark"): Theme {
@@ -34,6 +41,16 @@ function navigationTheme(scheme: "light" | "dark"): Theme {
 export default function App() {
   const scheme = useColorScheme() === "dark" ? "dark" : "light";
   const fontsLoaded = useAppFonts();
+
+  // Local-notification presentation, background mail sync (~15 min), and a
+  // first-launch permission prompt when notifications are enabled.
+  useEffect(() => {
+    installNotificationHandler();
+    void registerBackgroundMailSync();
+    void areNotificationsEnabled().then((enabled) => {
+      if (enabled) void ensureNotificationPermission();
+    });
+  }, []);
 
   return (
     <GestureHandlerRootView style={styles.root}>

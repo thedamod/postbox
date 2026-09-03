@@ -47,6 +47,35 @@ export type ComposeInput = {
   attachments?: OutgoingAttachmentInput[];
 };
 
+export type SyncPreview = {
+  messageId: number;
+  subject: string;
+  from: string;
+  snippet: string;
+};
+
+export type SyncFolderResult = {
+  path: string;
+  newMessages: number;
+  lastUid: number;
+  flagsChanged: number;
+  previews: SyncPreview[];
+};
+
+export type SyncAccountResult = {
+  account: string;
+  folders: SyncFolderResult[];
+  changed: boolean;
+  revision: number;
+  error?: string;
+};
+
+export type SyncState = {
+  revision: number;
+  lastSyncAt: string | null;
+  exists: boolean;
+};
+
 export const mailApi = {
   accounts(): Promise<{ accounts: EmailAccount[] }> {
     return api("/api/accounts");
@@ -83,10 +112,16 @@ export const mailApi = {
     });
   },
 
-  sync(accountId: number, folder?: string | null): Promise<{ result: unknown }> {
+  sync(accountId: number, folder?: string | null): Promise<{ result: SyncAccountResult }> {
     const params = new URLSearchParams({ wait: "1" });
     if (folder) params.set("folder", folder);
     return api(`/api/sync/${accountId}?${params}`, { method: "POST" });
+  },
+
+  /** Cheap revision poll — no provider I/O, safe to call on every resume. */
+  syncState(accountId: number): Promise<SyncState> {
+    const params = new URLSearchParams({ accountId: String(accountId) });
+    return api(`/api/sync/state?${params}`);
   },
 
   async waitForSync(jobId: string): Promise<void> {
@@ -107,7 +142,7 @@ export const mailApi = {
     throw new Error("Sync is still running. The inbox will update when you return.");
   },
 
-  syncMore(accountId: number, folder?: string | null): Promise<{ result: unknown }> {
+  syncMore(accountId: number, folder?: string | null): Promise<{ result: SyncAccountResult }> {
     const params = new URLSearchParams({ wait: "1" });
     if (folder) params.set("folder", folder);
     return api(`/api/sync/${accountId}/older?${params}`, { method: "POST" });
