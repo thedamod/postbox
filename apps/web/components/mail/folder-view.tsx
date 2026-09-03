@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import type { StoredMessage, StoredThread } from "@postbox/email-client/domain";
 import { Button } from "@postbox/ui";
 import { api, searchPath, threadsPath } from "@/lib/mail/api-client";
@@ -121,7 +121,9 @@ export function FolderView({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2 p-3">
-      <ListToolbar initial={initialQuery} />
+      <Suspense fallback={<div className="h-16 animate-pulse rounded-md bg-muted" aria-hidden />}>
+        <ListToolbar initial={initialQuery} />
+      </Suspense>
       <ThreadList
         accountId={accountId}
         folder={folder}
